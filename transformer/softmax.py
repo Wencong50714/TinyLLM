@@ -1,7 +1,7 @@
 import torch
 import triton
 import triton.language as tl
-from transformer.utils import calc_num_warps
+from .utils import calc_num_warps
 
 @triton.jit
 def _softmax_kernel_fused(

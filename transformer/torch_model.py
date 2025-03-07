@@ -1,35 +1,16 @@
 import math
 import struct
 import inspect
-from dataclasses import dataclass
-from typing import Any, Optional, Tuple
 import torch
 import torch.nn.functional as F
+
 from torch import nn
-from utils import *
-
-
-class RMSNorm(nn.Module):
-    def __init__(self, dim: int, eps: float):
-        super().__init__()
-        # eps是为了防止除以0的情况
-        self.eps = eps
-        # weight是一个可学习的参数，全部初始化为1
-        self.weight = nn.Parameter(torch.ones(dim))
-
-    def _norm(self, x):
-        # 计算RMSNorm的核心部分
-        # x.pow(2).mean(-1, keepdim=True)计算了输入x的平方的均值
-        # torch.rsqrt是平方根的倒数，这样就得到了RMSNorm的分母部分，再加上eps防止分母为0
-        # 最后乘以x，得到RMSNorm的结果
-        return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
-
-    def forward(self, x):
-        # forward函数是模型的前向传播
-        # 首先将输入x转为float类型，然后进行RMSNorm，最后再转回原来的数据类型
-        # 最后乘以weight，这是RMSNorm的一个可学习的缩放因子
-        output = self._norm(x.float()).type_as(x)
-        return output * self.weight
+from .utils import *
+from .softmax import fused_softmax
+from .rms_norm import TritonRMSNorm
+from .cross_entropy import TritonCrossEntropy
+from dataclasses import dataclass
+from typing import Any, Optional, Tuple
 
 
 class Attention(nn.Module):
@@ -118,7 +99,7 @@ class Attention(nn.Module):
             scores = torch.matmul(xq, xk.transpose(2, 3)) / math.sqrt(self.head_dim)
             assert hasattr(self, "mask")
             scores = scores + self.mask[:, :, :seqlen, :seqlen]
-            scores = F.softmax(scores.float(), dim=-1).type_as(xq)
+            scores = fused_softmax(scores.float()).type_as(xq)
             scores = self.attn_dropout(scores)
             output = torch.matmul(scores, xv)
 
@@ -178,9 +159,9 @@ class DecoderLayer(nn.Module):
         # 定义层的ID
         self.layer_id = layer_id
         # 定义注意力计算的归一化层
-        self.attention_norm = RMSNorm(args.dim, eps=args.norm_eps)
+        self.attention_norm = TritonRMSNorm(args.dim, eps=args.norm_eps)
         # 定义前馈神经网络计算的归一化层
-        self.ffn_norm = RMSNorm(args.dim, eps=args.norm_eps)
+        self.ffn_norm = TritonRMSNorm(args.dim, eps=args.norm_eps)
 
     def forward(self, x, freqs_cos, freqs_sin):
         # 前向传播函数
@@ -212,7 +193,7 @@ class Transformer(nn.Module):
         for layer_id in range(args.n_layers):
             self.layers.append(DecoderLayer(layer_id, args))
         # 归一化层
-        self.norm = RMSNorm(args.dim, eps=args.norm_eps)
+        self.norm = TritonRMSNorm(args.dim, eps=args.norm_eps)
         # 输出层
         self.output = nn.Linear(args.dim, args.vocab_size, bias=False)
 
@@ -225,6 +206,8 @@ class Transformer(nn.Module):
         )
         self.register_buffer("freqs_cos", freqs_cos, persistent=False)
         self.register_buffer("freqs_sin", freqs_sin, persistent=False)
+
+        self.criterion = TritonCrossEntropy()
 
         # 初始化所有权重
         self.apply(self._init_weights)
@@ -267,10 +250,13 @@ class Transformer(nn.Module):
 
         if targets is not None:
             # 如果给定了目标，计算损失
+            # logits = self.output(h)
+            # self.last_loss = F.cross_entropy(
+            #     logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1
+            # )
             logits = self.output(h)
-            self.last_loss = F.cross_entropy(
-                logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1
-            )
+            loss = self.criterion(logits, targets)
+            self.last_loss = loss
         else:
             # 推理时的小优化：只对最后一个位置的输出进行前向传播
             logits = self.output(h[:, [-1], :])
@@ -355,7 +341,7 @@ class Transformer(nn.Module):
                 if top_k is not None:
                     v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
                     logits[logits < v[:, [-1]]] = -float("Inf")
-                probs = F.softmax(logits, dim=-1)
+                probs = fused_softmax(logits)
                 idx_next = torch.multinomial(probs, num_samples=1)
 
             # 将采样的索引添加到序列中并继续

@@ -3,14 +3,14 @@ import pickle
 from contextlib import nullcontext
 import torch
 from transformer.utils import ModelArgs
-from transformer.triton_model import Transformer
+from transformer.torch_model import Transformer
 from tokenizer import Tokenizer
 import argparse
 
 class TextGenerator:
     def __init__(self, 
                  checkpoint='output/ckpt.pt',  # 模型检查点路径
-                 tokenizer_model_path='tok4096.model',  # 分词器模型路径
+                 tokenizer_model_path='data/tok4096.model',  # 分词器模型路径
                  seed=1337,  # 随机种子，确保可重复性
                  device=None,  # 设备，优先使用 CUDA，如果没有可用的 CUDA，则使用 CPU
                  dtype="float32"):  # 数据类型，默认为 float32，可以选择 float16 或 bfloat16
@@ -38,7 +38,7 @@ class TextGenerator:
         # 加载模型检查点文件
         checkpoint_dict = torch.load(self.checkpoint, map_location=self.device)  # 加载模型参数
         gptconf = ModelArgs(**checkpoint_dict['model_args'])  # 初始化模型参数
-        self.model = Transformer(gptconf)  # 实例化 Transformer 模型
+        self.model = Transformer(gptconf).cuda()  # 实例化 Transformer 模型
         state_dict = checkpoint_dict['model']  # 获取模型状态字典
         
         # 去除状态字典中的不必要前缀

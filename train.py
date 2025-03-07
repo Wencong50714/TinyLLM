@@ -7,7 +7,7 @@ from functools import partial
 
 import torch
 from transformer.utils import ModelArgs
-from transformer.triton_model import Transformer
+from transformer.torch_model import Transformer
 from preprocess import Task
 
 # -----------------------------------------------------------------------------
@@ -48,7 +48,7 @@ warmup_iters = 1000  # 学习率预热的步数
 
 # 系统设置
 device = "cuda:0"  # 设备选择：'cpu'，'cuda'，'cuda:0'等
-dtype = "bfloat16"  # 数据类型：'float32'，'bfloat16'，'float16'
+dtype = "float16"  # 数据类型：'float32'，'bfloat16'，'float16'
 
 # -----------------------------------------------------------------------------
 # 获取配置参数的键值对，便于后续的日志记录
