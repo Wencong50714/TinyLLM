@@ -3,6 +3,11 @@ import torch
 from typing import Tuple, Optional
 from dataclasses import dataclass
 
+if torch.cuda.device_count() > 1:
+    torch_cuda_device = torch.cuda.device
+else:
+    from contextlib import nullcontext
+    def torch_cuda_device(device): return nullcontext()
 
 @dataclass
 class ModelArgs:
