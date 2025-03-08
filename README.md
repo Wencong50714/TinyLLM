@@ -21,12 +21,15 @@ pip install -r requirements.txt
 
 ```bash
 # Download TinyStories dataset and train tokenizer
-python train_vocab.py      
+python train_vocab.py    
+  
 # Preprocess data
 python preprocess.py
+
 # Train Model
 python train.py
-#Generate text samples using trained model
+
+# Generate text samples using trained model
 python sample.py --prompt "your prompt"
 ```
 
