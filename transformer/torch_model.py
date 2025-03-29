@@ -8,7 +8,7 @@ from torch import nn
 from .utils import *
 from .softmax import fused_softmax
 from .rms_norm import TritonRMSNorm
-from .rope import fast_rope_embedding
+from .rope import fused_apply_rope
 from .cross_entropy import TritonCrossEntropy
 from dataclasses import dataclass
 from typing import Any, Optional, Tuple
@@ -60,7 +60,7 @@ class Attention(nn.Module):
         xv = xv.view(bsz, seqlen, self.n_local_kv_heads, self.head_dim)
 
         # 应用旋转位置嵌入（RoPE）。
-        xq, xk = fast_rope_embedding(xq, xk, freqs_cos, freqs_sin)
+        xq, xk = fused_apply_rope(xq, xk, freqs_cos, freqs_sin)
 
         # 对键和值进行扩展以适应重复次数。
         xk = repeat_kv(xk, self.n_rep)
