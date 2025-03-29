@@ -198,6 +198,7 @@ class Transformer(nn.Module):
         # 初始化最后一次前向传播的损失属性
         self.last_loss = None
 
+    # 正态分布初始化权重
     def _init_weights(self, module):
         # 初始化权重的函数
         if isinstance(module, nn.Linear):

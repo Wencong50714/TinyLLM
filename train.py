@@ -62,7 +62,7 @@ config = {k: globals()[k] for k in config_keys}  # 保存配置到字典中，�
 
 # 固定一些超参数的默认值
 lr_decay_iters = max_iters  # 学习率衰减步数，设置为等于最大迭代步数
-min_lr = 0.0  # 最小学习率，建议为学习率的十分之一
+min_lr = 5e-5  # 最小学习率，建议为学习率的十分之一
 vocab_source = 'custom'  # 词汇表来源
 master_process = True  # 用于区分主进程
 seed_offset = 0  # 随机种子偏移量
@@ -181,7 +181,7 @@ running_mfu = -1.0  # 初始化模型浮点运算利用率
 os.makedirs(out_dir, exist_ok=True)
 
 while True:
-    # 或许当前step的学习率
+    # 获取当前step的学习率
     lr = get_lr(iter_num) if decay_lr else learning_rate
     # 更新优化器中的学习率
     for param_group in optimizer.param_groups:
